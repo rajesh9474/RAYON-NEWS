@@ -1,5 +1,5 @@
 {
-  "name": "Global News",
+  "name": "RAYON",
   "description": "A modern, responsive global news aggregation app featuring morning briefings, country and state feeds, AI summaries, breaking news ticker, and multi-category exploration.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

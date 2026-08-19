@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "Global News"
+rootProject.name = "RAYON"
 
 include(":app")

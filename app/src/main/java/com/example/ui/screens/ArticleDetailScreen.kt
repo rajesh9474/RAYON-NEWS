@@ -176,7 +176,7 @@ fun ArticleDetailScreen(
                             val sendIntent = Intent().apply {
                                 action = Intent.ACTION_SEND
                                 putExtra(Intent.EXTRA_TITLE, currentArticle.title)
-                                putExtra(Intent.EXTRA_TEXT, "${currentArticle.title}\n\n${currentArticle.summary}\n\nRead full story via Global News: ${currentArticle.url}")
+                                putExtra(Intent.EXTRA_TEXT, "${currentArticle.title}\n\n${currentArticle.summary}\n\nRead full story via RAYON: ${currentArticle.url}")
                                 type = "text/plain"
                             }
                             context.startActivity(Intent.createChooser(sendIntent, "Share News Article"))

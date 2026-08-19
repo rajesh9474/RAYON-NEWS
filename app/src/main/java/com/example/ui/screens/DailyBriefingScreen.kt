@@ -142,7 +142,7 @@ fun DailyBriefingScreen(
                             val shareText = "☀️ Daily Morning Brief (${briefing?.dateStr ?: "Today"})\n\n" +
                                     "${briefing?.greetingMessage}\n\n" +
                                     "${briefing?.keyTakeaways}\n\n" +
-                                    "Read full coverage via Global News App"
+                                    "Read full coverage via RAYON News"
                             val sendIntent = Intent().apply {
                                 action = Intent.ACTION_SEND
                                 putExtra(Intent.EXTRA_TEXT, shareText)

@@ -120,7 +120,7 @@ fun HomeScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "G",
+                            text = "R",
                             style = MaterialTheme.typography.titleMedium.copy(
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold,
@@ -130,7 +130,7 @@ fun HomeScreen(
                     }
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = "GlobalFeed",
+                        text = "RAYON",
                         style = MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.Bold,
                             fontSize = 20.sp,

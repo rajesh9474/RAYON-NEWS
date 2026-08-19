@@ -255,7 +255,7 @@ fun MorningBriefCard(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = "GN",
+                                    text = "R",
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         color = Color.White,
                                         fontWeight = FontWeight.Bold,
@@ -265,7 +265,7 @@ fun MorningBriefCard(
                             }
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Global News • 6:30 AM Edition",
+                                text = "RAYON • 6:30 AM Edition",
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     color = Color.White.copy(alpha = 0.90f),
                                     fontSize = 11.sp,

@@ -105,7 +105,7 @@ fun GlobalNewsNavigation(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "G",
+                                text = "R",
                                 style = MaterialTheme.typography.titleLarge.copy(
                                     color = Color.White,
                                     fontWeight = FontWeight.Bold
