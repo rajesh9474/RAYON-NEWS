@@ -22,15 +22,24 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -72,6 +81,7 @@ fun HomeScreen(
     val latestBriefing by viewModel.latestDailyBriefing.collectAsStateWithLifecycle()
     val breakingNews by viewModel.breakingNews.collectAsStateWithLifecycle()
     val personalizedFeed by viewModel.personalizedFeed.collectAsStateWithLifecycle()
+    val allArticles by viewModel.allArticles.collectAsStateWithLifecycle()
     val pipelineState by viewModel.pipelineState.collectAsStateWithLifecycle()
     val notifications by viewModel.notifications.collectAsStateWithLifecycle()
     val selectedCategory by viewModel.selectedCategory.collectAsStateWithLifecycle()
@@ -83,11 +93,98 @@ fun HomeScreen(
     val unreadCount = notifications.count { !it.isRead }
     val countryInfo = CountryDatabase.getByName(preferences.primaryCountry)
 
-    // Filter feed by category if a pill is chosen
-    val displayedArticles = if (selectedCategory == "Top News") {
-        personalizedFeed
-    } else {
-        personalizedFeed.filter { it.category.equals(selectedCategory, ignoreCase = true) }
+    // Category definition list for the horizontal chips
+    data class FeedChipCategory(
+        val id: String,
+        val displayName: String,
+        val emoji: String,
+        val filterQuery: String
+    )
+
+    val feedCategories = remember {
+        listOf(
+            FeedChipCategory("top", "Top News", "🔥", "Top News"),
+            FeedChipCategory("tech", "Tech", "💻", "Tech"),
+            FeedChipCategory("politics", "Politics", "🏛️", "Politics"),
+            FeedChipCategory("sports", "Sports", "🏆", "Sports"),
+            FeedChipCategory("business", "Business", "💼", "Business"),
+            FeedChipCategory("ai", "AI", "🤖", "Artificial Intelligence"),
+            FeedChipCategory("world", "World", "🌍", "World"),
+            FeedChipCategory("science", "Science", "🧪", "Science"),
+            FeedChipCategory("entertainment", "Entertainment", "🎬", "Entertainment"),
+            FeedChipCategory("health", "Health", "🏥", "Health")
+        )
+    }
+
+    // Filter feed by selected category
+    val displayedArticles = remember(selectedCategory, personalizedFeed, allArticles) {
+        if (selectedCategory == "Top News" || selectedCategory == "top" || selectedCategory.isBlank()) {
+            if (personalizedFeed.isNotEmpty()) personalizedFeed else allArticles
+        } else {
+            val query = selectedCategory.trim()
+            val filtered = allArticles.filter { article ->
+                when {
+                    article.category.equals(query, ignoreCase = true) -> true
+                    query.equals("Tech", ignoreCase = true) && (
+                        article.category.contains("Tech", ignoreCase = true) ||
+                        article.category.contains("Artificial Intelligence", ignoreCase = true) ||
+                        article.tags.contains("Tech", ignoreCase = true) ||
+                        article.tags.contains("Silicon", ignoreCase = true)
+                    ) -> true
+                    query.equals("Politics", ignoreCase = true) && (
+                        article.category.contains("Politic", ignoreCase = true) ||
+                        article.tags.contains("Politics", ignoreCase = true) ||
+                        article.tags.contains("Governance", ignoreCase = true) ||
+                        article.tags.contains("Privacy", ignoreCase = true) ||
+                        article.tags.contains("Parliament", ignoreCase = true)
+                    ) -> true
+                    query.equals("Sports", ignoreCase = true) && (
+                        article.category.contains("Sport", ignoreCase = true) ||
+                        article.category.equals("Cricket", ignoreCase = true) ||
+                        article.category.equals("Football", ignoreCase = true) ||
+                        article.tags.contains("Sports", ignoreCase = true) ||
+                        article.tags.contains("Cricket", ignoreCase = true)
+                    ) -> true
+                    query.equals("Business", ignoreCase = true) && (
+                        article.category.contains("Business", ignoreCase = true) ||
+                        article.category.contains("Finance", ignoreCase = true) ||
+                        article.category.contains("Stock", ignoreCase = true) ||
+                        article.category.contains("Startup", ignoreCase = true)
+                    ) -> true
+                    query.equals("AI", ignoreCase = true) || query.equals("Artificial Intelligence", ignoreCase = true) -> {
+                        article.category.contains("AI", ignoreCase = true) ||
+                        article.category.contains("Artificial Intelligence", ignoreCase = true) ||
+                        article.tags.contains("AI", ignoreCase = true) ||
+                        article.tags.contains("LLM", ignoreCase = true)
+                    }
+                    query.equals("World", ignoreCase = true) -> {
+                        article.category.contains("World", ignoreCase = true) ||
+                        article.country.equals("Global", ignoreCase = true) ||
+                        article.region.equals("Worldwide", ignoreCase = true)
+                    }
+                    query.equals("Science", ignoreCase = true) -> {
+                        article.category.contains("Science", ignoreCase = true) ||
+                        article.category.contains("Space", ignoreCase = true) ||
+                        article.tags.contains("Science", ignoreCase = true)
+                    }
+                    query.equals("Entertainment", ignoreCase = true) -> {
+                        article.category.contains("Entertainment", ignoreCase = true) ||
+                        article.category.contains("Gaming", ignoreCase = true) ||
+                        article.category.contains("Movie", ignoreCase = true)
+                    }
+                    query.equals("Health", ignoreCase = true) -> {
+                        article.category.contains("Health", ignoreCase = true) ||
+                        article.tags.contains("Health", ignoreCase = true) ||
+                        article.tags.contains("Medicine", ignoreCase = true)
+                    }
+                    else -> {
+                        article.category.contains(query, ignoreCase = true) ||
+                        article.tags.contains(query, ignoreCase = true)
+                    }
+                }
+            }
+            if (filtered.isNotEmpty()) filtered else personalizedFeed.filter { it.category.contains(query, ignoreCase = true) }
+        }
     }
 
     LazyColumn(
@@ -212,8 +309,68 @@ fun HomeScreen(
             }
         }
 
+        // --- HORIZONTAL CATEGORY CHIPS AT TOP OF FEED ---
+        item {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
+                    .padding(vertical = 10.dp)
+                    .testTag("category_chips_section")
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    feedCategories.forEach { category ->
+                        val isSelected = selectedCategory.equals(category.filterQuery, ignoreCase = true) ||
+                                (category.id == "top" && (selectedCategory.equals("Top News", ignoreCase = true) || selectedCategory.isBlank()))
+
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = {
+                                viewModel.selectCategory(category.filterQuery)
+                            },
+                            label = {
+                                Text(
+                                    text = category.displayName,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    fontSize = 13.sp
+                                )
+                            },
+                            leadingIcon = {
+                                Text(
+                                    text = category.emoji,
+                                    fontSize = 14.sp
+                                )
+                            },
+                            shape = RoundedCornerShape(20.dp),
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                                selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimary,
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                                labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                enabled = true,
+                                selected = isSelected,
+                                borderColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+                                borderWidth = 1.dp
+                            ),
+                            modifier = Modifier.testTag("category_chip_${category.id}")
+                        )
+                    }
+                }
+            }
+        }
+
         // --- HIGH DENSITY LIVE BREAKING NEWS TICKER ---
-        if (breakingNews.isNotEmpty()) {
+        if (breakingNews.isNotEmpty() && (selectedCategory == "Top News" || selectedCategory.isBlank())) {
             item {
                 BreakingNewsTicker(
                     breakingArticles = breakingNews,
@@ -223,58 +380,101 @@ fun HomeScreen(
         }
 
         // --- HIGH DENSITY MORNING BRIEF HERO CARD ---
-        item {
-            Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
-                MorningBriefCard(
-                    briefing = latestBriefing,
-                    preferences = preferences,
-                    pipelineState = pipelineState,
-                    onOpenFullBriefing = { viewModel.navigateTo(AppScreen.DAILY_BRIEFING) },
-                    onTriggerPipeline = { viewModel.trigger630AmBriefingUpdate() }
-                )
+        if (selectedCategory == "Top News" || selectedCategory.isBlank()) {
+            item {
+                Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+                    MorningBriefCard(
+                        briefing = latestBriefing,
+                        preferences = preferences,
+                        pipelineState = pipelineState,
+                        onOpenFullBriefing = { viewModel.navigateTo(AppScreen.DAILY_BRIEFING) },
+                        onTriggerPipeline = { viewModel.trigger630AmBriefingUpdate() }
+                    )
+                }
             }
         }
 
-        // --- HIGH DENSITY CATEGORY PILL FILTER CHIPS ---
-        item {
-            Column(modifier = Modifier.padding(vertical = 8.dp)) {
+        // --- FEED HEADER WITH ACTIVE FILTER STATUS ---
+        if (selectedCategory != "Top News" && selectedCategory.isNotBlank()) {
+            item {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    NewsCategories.ALL.take(10).forEach { category ->
-                        val isSelected = selectedCategory.equals(category.name, ignoreCase = true)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "Showing $selectedCategory News",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "(${displayedArticles.size})",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
 
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(24.dp))
-                                .background(
-                                    if (isSelected) Color(0xFF0F172A) // slate-900
-                                    else MaterialTheme.colorScheme.surface
-                                )
-                                .then(
-                                    if (!isSelected) {
-                                        Modifier.background(
-                                            color = MaterialTheme.colorScheme.surface,
-                                            shape = RoundedCornerShape(24.dp)
-                                        )
-                                    } else Modifier
-                                )
-                                .clickable { viewModel.selectCategory(category.name) }
-                                .padding(horizontal = 14.dp, vertical = 8.dp)
-                                .testTag("category_pill_${category.id}")
+                    OutlinedButton(
+                        onClick = { viewModel.selectCategory("Top News") },
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Clear,
+                            contentDescription = "Clear filter",
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Reset", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+        }
+
+        // --- EMPTY STATE IF NO ARTICLES MATCH ---
+        if (displayedArticles.isEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 24.dp)
+                        .testTag("empty_category_card"),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "🔍",
+                            fontSize = 32.sp
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = "No articles found in $selectedCategory",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Try switching to another category or browse Top News.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Button(
+                            onClick = { viewModel.selectCategory("Top News") },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                         ) {
-                            Text(
-                                text = category.name,
-                                style = MaterialTheme.typography.labelMedium.copy(
-                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-                                    fontSize = 13.sp
-                                ),
-                                color = if (isSelected) Color.White else HighDensityTextSecondary
-                            )
+                            Text("Browse All Top News")
                         }
                     }
                 }
