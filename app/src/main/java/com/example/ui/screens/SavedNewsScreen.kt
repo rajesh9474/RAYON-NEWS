@@ -46,6 +46,7 @@ fun SavedNewsScreen(
     modifier: Modifier = Modifier
 ) {
     val bookmarkedArticles by viewModel.bookmarkedArticles.collectAsStateWithLifecycle()
+    val urlValidationMap by viewModel.urlValidationMap.collectAsStateWithLifecycle()
 
     Column(
         modifier = modifier
@@ -144,7 +145,8 @@ fun SavedNewsScreen(
                         NewsCard(
                             article = article,
                             onClick = { viewModel.openArticle(article) },
-                            onBookmarkToggle = { viewModel.toggleBookmark(article) }
+                            onBookmarkToggle = { viewModel.toggleBookmark(article) },
+                            urlValidationResult = urlValidationMap[article.url]
                         )
                     }
                 }

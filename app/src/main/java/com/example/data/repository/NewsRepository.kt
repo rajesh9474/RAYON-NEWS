@@ -9,8 +9,14 @@ import com.example.data.model.NewsSource
 import com.example.data.model.UserPreferences
 import com.example.data.remote.GeminiSummarizerService
 import com.example.data.remote.NewsIngestionService
+import com.example.data.remote.UrlStatus
+import com.example.data.remote.UrlValidationResult
+import com.example.data.remote.UrlValidationService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -31,6 +37,22 @@ class NewsRepository(private val newsDao: NewsDao) {
     val newsSources: Flow<List<NewsSource>> = newsDao.getAllSources()
     val notifications: Flow<List<AppNotification>> = newsDao.getNotifications()
     val adminMetrics: Flow<AdminMetrics?> = newsDao.getAdminMetrics()
+
+    private val _urlValidationMap = MutableStateFlow<Map<String, UrlValidationResult>>(emptyMap())
+    val urlValidationMap: StateFlow<Map<String, UrlValidationResult>> = _urlValidationMap.asStateFlow()
+
+    suspend fun validateArticleUrl(url: String, forceRefresh: Boolean = false): UrlValidationResult = withContext(Dispatchers.IO) {
+        val result = UrlValidationService.validateUrl(url, forceRefresh)
+        _urlValidationMap.value = _urlValidationMap.value + (url to result)
+        result
+    }
+
+    suspend fun validateMultipleArticles(articles: List<NewsArticle>): Map<String, UrlValidationResult> = withContext(Dispatchers.IO) {
+        val urls = articles.map { it.url }.filter { it.isNotBlank() }
+        val results = UrlValidationService.validateMultipleUrls(urls)
+        _urlValidationMap.value = _urlValidationMap.value + results
+        results
+    }
 
     suspend fun initializeIfEmpty() = withContext(Dispatchers.IO) {
         val count = newsDao.getArticlesCount()
@@ -123,6 +145,24 @@ class NewsRepository(private val newsDao: NewsDao) {
             aiKeyPoints = keyPointsJson,
             aiWhyItMatters = result.whyItMatters
         )
+    }
+
+    suspend fun verifyArticleCredibility(article: NewsArticle): com.example.data.remote.AiFactCheckResult = withContext(Dispatchers.IO) {
+        GeminiSummarizerService.verifyArticle(
+            title = article.title,
+            content = article.description + " " + article.summary,
+            source = article.source,
+            category = article.category,
+            url = article.url
+        )
+    }
+
+    suspend fun refreshLiveFeeds(): List<NewsArticle> = withContext(Dispatchers.IO) {
+        val liveArticles = NewsIngestionService.fetchLiveRssArticles()
+        if (liveArticles.isNotEmpty()) {
+            newsDao.insertArticles(liveArticles)
+        }
+        liveArticles
     }
 
     suspend fun trigger630AmPipeline(onStepProgress: (step: String, percent: Float) -> Unit = { _, _ -> }) = withContext(Dispatchers.IO) {

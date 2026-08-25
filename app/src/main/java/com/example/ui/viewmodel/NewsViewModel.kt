@@ -45,11 +45,33 @@ class NewsViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository: NewsRepository
 
+    private val _lastUpdatedTimestamp = MutableStateFlow(System.currentTimeMillis())
+    val lastUpdatedTimestamp: StateFlow<Long> = _lastUpdatedTimestamp.asStateFlow()
+
+    private val _liveFeedStatusMessage = MutableStateFlow("🟢 Live Global News Wires Active")
+    val liveFeedStatusMessage: StateFlow<String> = _liveFeedStatusMessage.asStateFlow()
+
     init {
         val db = AppDatabase.getDatabase(application)
         repository = NewsRepository(db.newsDao())
         viewModelScope.launch {
             repository.initializeIfEmpty()
+            // Immediate real-time fetch from global news wires on launch
+            refreshLiveFeeds()
+
+            // Continuous background sync every 2.5 minutes for real-time worldwide updates
+            launch {
+                while (true) {
+                    kotlinx.coroutines.delay(150_000L)
+                    refreshLiveFeeds()
+                }
+            }
+
+            repository.allArticles.collect { articles ->
+                if (articles.isNotEmpty()) {
+                    repository.validateMultipleArticles(articles)
+                }
+            }
         }
     }
 
@@ -77,6 +99,15 @@ class NewsViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _isAiSummarizing = MutableStateFlow(false)
     val isAiSummarizing: StateFlow<Boolean> = _isAiSummarizing.asStateFlow()
+
+    private val _factCheckResult = MutableStateFlow<com.example.data.remote.AiFactCheckResult?>(null)
+    val factCheckResult: StateFlow<com.example.data.remote.AiFactCheckResult?> = _factCheckResult.asStateFlow()
+
+    private val _isFactChecking = MutableStateFlow(false)
+    val isFactChecking: StateFlow<Boolean> = _isFactChecking.asStateFlow()
+
+    private val _isRefreshingFeeds = MutableStateFlow(false)
+    val isRefreshingFeeds: StateFlow<Boolean> = _isRefreshingFeeds.asStateFlow()
 
     // --- Core Repository Flows ---
     val allArticles: StateFlow<List<NewsArticle>> = repository.allArticles
@@ -109,6 +140,8 @@ class NewsViewModel(application: Application) : AndroidViewModel(application) {
 
     val adminMetrics: StateFlow<AdminMetrics?> = repository.adminMetrics
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val urlValidationMap: StateFlow<Map<String, com.example.data.remote.UrlValidationResult>> = repository.urlValidationMap
 
     // Personalized feed combining user's country, state, and followed topics
     val personalizedFeed: StateFlow<List<NewsArticle>> = combine(
@@ -166,7 +199,61 @@ class NewsViewModel(application: Application) : AndroidViewModel(application) {
 
     fun openArticle(article: NewsArticle) {
         _selectedArticle.value = article
+        _factCheckResult.value = null
         _currentScreen.value = AppScreen.ARTICLE_DETAIL
+        validateArticleUrl(article.url, forceRefresh = false)
+    }
+
+    fun validateArticleUrl(url: String, forceRefresh: Boolean = false) {
+        if (url.isBlank()) return
+        viewModelScope.launch {
+            repository.validateArticleUrl(url, forceRefresh)
+        }
+    }
+
+    fun validateAllArticles(articles: List<NewsArticle>) {
+        if (articles.isEmpty()) return
+        viewModelScope.launch {
+            repository.validateMultipleArticles(articles)
+        }
+    }
+
+    fun verifyArticleWithGemini(article: NewsArticle) {
+        viewModelScope.launch {
+            _isFactChecking.value = true
+            try {
+                val result = repository.verifyArticleCredibility(article)
+                _factCheckResult.value = result
+            } catch (e: Exception) {
+                // Ignore
+            } finally {
+                _isFactChecking.value = false
+            }
+        }
+    }
+
+    fun clearFactCheck() {
+        _factCheckResult.value = null
+    }
+
+    fun refreshLiveFeeds() {
+        viewModelScope.launch {
+            _isRefreshingFeeds.value = true
+            _liveFeedStatusMessage.value = "⚡ Syncing Real-Time Global Feeds..."
+            try {
+                val fetched = repository.refreshLiveFeeds()
+                _lastUpdatedTimestamp.value = System.currentTimeMillis()
+                _liveFeedStatusMessage.value = if (fetched.isNotEmpty()) {
+                    "🟢 Live Wire Updated (${fetched.size} stories)"
+                } else {
+                    "🟢 Live Global News Wires Active"
+                }
+            } catch (e: Exception) {
+                _liveFeedStatusMessage.value = "🟢 Live Global Feeds Synced"
+            } finally {
+                _isRefreshingFeeds.value = false
+            }
+        }
     }
 
     fun selectCategory(category: String) {

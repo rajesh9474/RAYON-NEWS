@@ -54,6 +54,7 @@ fun SearchScreen(
     val searchCountryFilter by viewModel.searchCountryFilter.collectAsStateWithLifecycle()
     val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
     val allArticles by viewModel.allArticles.collectAsStateWithLifecycle()
+    val urlValidationMap by viewModel.urlValidationMap.collectAsStateWithLifecycle()
 
     val popularSearches = listOf("Artificial Intelligence", "Semiconductor", "Climate Summit", "ISRO", "Champions League", "Cricket", "Sensex", "Fusion Energy")
 
@@ -199,7 +200,8 @@ fun SearchScreen(
                 NewsCard(
                     article = article,
                     onClick = { viewModel.openArticle(article) },
-                    onBookmarkToggle = { viewModel.toggleBookmark(article) }
+                    onBookmarkToggle = { viewModel.toggleBookmark(article) },
+                    urlValidationResult = urlValidationMap[article.url]
                 )
             }
         }

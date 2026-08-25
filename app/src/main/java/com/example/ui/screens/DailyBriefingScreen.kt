@@ -77,6 +77,7 @@ fun DailyBriefingScreen(
     val allArticles by viewModel.allArticles.collectAsStateWithLifecycle()
     val pipelineState by viewModel.pipelineState.collectAsStateWithLifecycle()
     val isAiSummarizing by viewModel.isAiSummarizing.collectAsStateWithLifecycle()
+    val urlValidationMap by viewModel.urlValidationMap.collectAsStateWithLifecycle()
 
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     var clusterArticleToShow by remember { mutableStateOf<NewsArticle?>(null) }
@@ -384,7 +385,8 @@ fun DailyBriefingScreen(
                     onAiSummaryClick = {
                         aiSummaryArticleToShow = article
                         viewModel.generateAiSummaryForArticle(article)
-                    }
+                    },
+                    urlValidationResult = urlValidationMap[article.url]
                 )
             }
         }

@@ -44,11 +44,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.data.model.NewsArticle
+import com.example.data.remote.UrlStatus
+import com.example.data.remote.UrlValidationResult
 import com.example.ui.theme.CategoryColors
 import com.example.ui.theme.HighDensityBorderSubtle
 import com.example.ui.theme.NewsAmber
 import com.example.ui.theme.NewsBluePrimary
 import com.example.ui.theme.NewsCrimson
+import com.example.ui.theme.NewsEmerald
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Verified
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -60,6 +65,7 @@ fun NewsCard(
     onBookmarkToggle: () -> Unit,
     onClusterClick: (() -> Unit)? = null,
     onAiSummaryClick: (() -> Unit)? = null,
+    urlValidationResult: UrlValidationResult? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -93,7 +99,7 @@ fun NewsCard(
                         .weight(1f)
                         .padding(end = 12.dp)
                 ) {
-                    // Category Tag with Indicator Dot
+                    // Category Tag with Indicator Dot & Verification Badges
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(bottom = 4.dp)
@@ -133,6 +139,35 @@ fun NewsCard(
                                 )
                             }
                         }
+
+                        // Flag dead or invalid links as Unverified Source
+                        if (urlValidationResult?.isUnverified == true) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(NewsCrimson.copy(alpha = 0.15f))
+                                    .padding(horizontal = 5.dp, vertical = 1.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Warning,
+                                        contentDescription = "Unverified Source",
+                                        tint = NewsCrimson,
+                                        modifier = Modifier.size(10.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Text(
+                                        text = "UNVERIFIED SOURCE",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            color = NewsCrimson,
+                                            fontWeight = FontWeight.Black,
+                                            fontSize = 8.sp
+                                        )
+                                    )
+                                }
+                            }
+                        }
                     }
 
                     // Headline
@@ -150,17 +185,36 @@ fun NewsCard(
 
                     Spacer(modifier = Modifier.height(6.dp))
 
-                    // Publisher & Time Ago
-                    Text(
-                        text = "${article.source.uppercase(Locale.ENGLISH)} • ${formatTimeAgo(article.publishedAt).uppercase(Locale.ENGLISH)}",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Medium,
-                            letterSpacing = 0.3.sp
-                        ),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1
-                    )
+                    // Publisher & Time Ago & URL verification check
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "${article.source.uppercase(Locale.ENGLISH)} • ${formatTimeAgo(article.publishedAt).uppercase(Locale.ENGLISH)}",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium,
+                                letterSpacing = 0.3.sp
+                            ),
+                            color = if (urlValidationResult?.isUnverified == true) NewsCrimson else MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1
+                        )
+                        if (urlValidationResult?.isVerified == true) {
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(
+                                imageVector = Icons.Default.Verified,
+                                contentDescription = "Verified Source Link",
+                                tint = NewsEmerald,
+                                modifier = Modifier.size(12.dp)
+                            )
+                        } else if (urlValidationResult?.isUnverified == true) {
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = "Unverified Source Link",
+                                tint = NewsCrimson,
+                                modifier = Modifier.size(12.dp)
+                            )
+                        }
+                    }
                 }
 
                 // Right Image Thumbnail (Rounded 12dp)

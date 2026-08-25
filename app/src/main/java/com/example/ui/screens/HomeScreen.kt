@@ -1,5 +1,12 @@
 package com.example.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -16,6 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -41,6 +49,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -69,9 +81,11 @@ import com.example.ui.theme.HighDensityTextSecondary
 import com.example.ui.theme.NewsAmber
 import com.example.ui.theme.NewsBluePrimary
 import com.example.ui.theme.NewsCrimson
+import com.example.ui.theme.NewsEmerald
 import com.example.ui.viewmodel.AppScreen
 import com.example.ui.viewmodel.NewsViewModel
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     viewModel: NewsViewModel,
@@ -86,6 +100,11 @@ fun HomeScreen(
     val notifications by viewModel.notifications.collectAsStateWithLifecycle()
     val selectedCategory by viewModel.selectedCategory.collectAsStateWithLifecycle()
     val isAiSummarizing by viewModel.isAiSummarizing.collectAsStateWithLifecycle()
+    val urlValidationMap by viewModel.urlValidationMap.collectAsStateWithLifecycle()
+    val isRefreshingFeeds by viewModel.isRefreshingFeeds.collectAsStateWithLifecycle()
+    val liveFeedStatusMessage by viewModel.liveFeedStatusMessage.collectAsStateWithLifecycle()
+
+    val pullRefreshState = rememberPullToRefreshState()
 
     var clusterArticleToShow by remember { mutableStateOf<NewsArticle?>(null) }
     var aiSummaryArticleToShow by remember { mutableStateOf<NewsArticle?>(null) }
@@ -187,13 +206,30 @@ fun HomeScreen(
         }
     }
 
-    LazyColumn(
+    PullToRefreshBox(
+        isRefreshing = isRefreshingFeeds,
+        onRefresh = { viewModel.refreshLiveFeeds() },
+        state = pullRefreshState,
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .testTag("home_screen"),
-        contentPadding = PaddingValues(bottom = 80.dp)
+            .testTag("home_pull_to_refresh_box"),
+        indicator = {
+            PullToRefreshDefaults.Indicator(
+                state = pullRefreshState,
+                isRefreshing = isRefreshingFeeds,
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                color = NewsBluePrimary,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
+        }
     ) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .testTag("home_screen"),
+            contentPadding = PaddingValues(bottom = 80.dp)
+        ) {
         // --- HIGH DENSITY TOP HEADER ---
         item {
             Row(
@@ -226,15 +262,35 @@ fun HomeScreen(
                         )
                     }
                     Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = "RAYON",
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp,
-                            letterSpacing = (-0.5).sp
-                        ),
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
+                    Column {
+                        Text(
+                            text = "RAYON",
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp,
+                                letterSpacing = (-0.5).sp
+                            ),
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.clickable { viewModel.refreshLiveFeeds() }
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isRefreshingFeeds) NewsAmber else NewsEmerald)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (isRefreshingFeeds) "Syncing Wire..." else "Live Global Wire",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (isRefreshingFeeds) NewsAmber else NewsEmerald
+                            )
+                        }
+                    }
                 }
 
                 // High Density Action Buttons (Search, Notification Bell with Red Live Dot, Profile)
@@ -309,62 +365,56 @@ fun HomeScreen(
             }
         }
 
-        // --- HORIZONTAL CATEGORY CHIPS AT TOP OF FEED ---
+        // --- HORIZONTAL CATEGORY FILTER CHIPS AT TOP OF NEWS FEED ---
         item {
-            Column(
+            LazyRow(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
                     .padding(vertical = 10.dp)
-                    .testTag("category_chips_section")
+                    .testTag("category_filter_lazy_row"),
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    feedCategories.forEach { category ->
-                        val isSelected = selectedCategory.equals(category.filterQuery, ignoreCase = true) ||
-                                (category.id == "top" && (selectedCategory.equals("Top News", ignoreCase = true) || selectedCategory.isBlank()))
+                items(feedCategories, key = { it.id }) { category ->
+                    val isSelected = selectedCategory.equals(category.filterQuery, ignoreCase = true) ||
+                            (category.id == "top" && (selectedCategory.equals("Top News", ignoreCase = true) || selectedCategory.isBlank()))
 
-                        FilterChip(
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = {
+                            viewModel.selectCategory(category.filterQuery)
+                        },
+                        label = {
+                            Text(
+                                text = category.displayName,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                fontSize = 13.sp
+                            )
+                        },
+                        leadingIcon = {
+                            Text(
+                                text = category.emoji,
+                                fontSize = 14.sp
+                            )
+                        },
+                        shape = RoundedCornerShape(20.dp),
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primary,
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                            selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimary,
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                            labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        ),
+                        border = FilterChipDefaults.filterChipBorder(
+                            enabled = true,
                             selected = isSelected,
-                            onClick = {
-                                viewModel.selectCategory(category.filterQuery)
-                            },
-                            label = {
-                                Text(
-                                    text = category.displayName,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    fontSize = 13.sp
-                                )
-                            },
-                            leadingIcon = {
-                                Text(
-                                    text = category.emoji,
-                                    fontSize = 14.sp
-                                )
-                            },
-                            shape = RoundedCornerShape(20.dp),
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-                                selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimary,
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
-                                labelColor = MaterialTheme.colorScheme.onSurfaceVariant
-                            ),
-                            border = FilterChipDefaults.filterChipBorder(
-                                enabled = true,
-                                selected = isSelected,
-                                borderColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
-                                borderWidth = 1.dp
-                            ),
-                            modifier = Modifier.testTag("category_chip_${category.id}")
-                        )
-                    }
+                            borderColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+                            borderWidth = 1.dp
+                        ),
+                        modifier = Modifier.testTag("category_chip_${category.id}")
+                    )
                 }
             }
         }
@@ -396,10 +446,23 @@ fun HomeScreen(
 
         // --- FEED HEADER WITH ACTIVE FILTER STATUS ---
         if (selectedCategory != "Top News" && selectedCategory.isNotBlank()) {
-            item {
+            item(key = "active_category_header") {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .animateItem(
+                            fadeInSpec = spring(
+                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                stiffness = Spring.StiffnessMediumLow
+                            ),
+                            fadeOutSpec = spring(
+                                stiffness = Spring.StiffnessMedium
+                            ),
+                            placementSpec = spring(
+                                dampingRatio = Spring.DampingRatioLowBouncy,
+                                stiffness = Spring.StiffnessMediumLow
+                            )
+                        )
                         .padding(horizontal = 16.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
@@ -437,10 +500,23 @@ fun HomeScreen(
 
         // --- EMPTY STATE IF NO ARTICLES MATCH ---
         if (displayedArticles.isEmpty()) {
-            item {
+            item(key = "empty_category_state") {
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .animateItem(
+                            fadeInSpec = spring(
+                                dampingRatio = Spring.DampingRatioLowBouncy,
+                                stiffness = Spring.StiffnessMediumLow
+                            ),
+                            fadeOutSpec = spring(
+                                stiffness = Spring.StiffnessMedium
+                            ),
+                            placementSpec = spring(
+                                dampingRatio = Spring.DampingRatioLowBouncy,
+                                stiffness = Spring.StiffnessMediumLow
+                            )
+                        )
                         .padding(horizontal = 16.dp, vertical = 24.dp)
                         .testTag("empty_category_card"),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
@@ -481,9 +557,25 @@ fun HomeScreen(
             }
         }
 
-        // --- COMPACT NEWS FEED ITEMS ---
+        // --- COMPACT NEWS FEED ITEMS WITH SMOOTH ENTER/EXIT ANIMATIONS ---
         items(displayedArticles, key = { it.id }) { article ->
-            Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 5.dp)) {
+            Box(
+                modifier = Modifier
+                    .animateItem(
+                        fadeInSpec = spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        ),
+                        fadeOutSpec = spring(
+                            stiffness = Spring.StiffnessMedium
+                        ),
+                        placementSpec = spring(
+                            dampingRatio = Spring.DampingRatioLowBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        )
+                    )
+                    .padding(horizontal = 16.dp, vertical = 5.dp)
+            ) {
                 NewsCard(
                     article = article,
                     onClick = { viewModel.openArticle(article) },
@@ -492,11 +584,13 @@ fun HomeScreen(
                     onAiSummaryClick = {
                         aiSummaryArticleToShow = article
                         viewModel.generateAiSummaryForArticle(article)
-                    }
+                    },
+                    urlValidationResult = urlValidationMap[article.url]
                 )
             }
         }
     }
+}
 
     // Cluster Coverage Dialog
     clusterArticleToShow?.let { article ->

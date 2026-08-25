@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -30,10 +31,15 @@ import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.FormatSize
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -46,6 +52,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -65,6 +72,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.data.model.NewsArticle
+import com.example.data.remote.UrlStatus
+import com.example.data.remote.UrlValidationResult
 import com.example.ui.components.ClusterCoverageDialog
 import com.example.ui.components.NewsCard
 import com.example.ui.components.formatTimeAgo
@@ -86,9 +95,13 @@ fun ArticleDetailScreen(
     val article by viewModel.selectedArticle.collectAsStateWithLifecycle()
     val allArticles by viewModel.allArticles.collectAsStateWithLifecycle()
     val isAiSummarizing by viewModel.isAiSummarizing.collectAsStateWithLifecycle()
+    val factCheckResult by viewModel.factCheckResult.collectAsStateWithLifecycle()
+    val isFactChecking by viewModel.isFactChecking.collectAsStateWithLifecycle()
     val preferences by viewModel.userPreferences.collectAsStateWithLifecycle()
+    val urlValidationMap by viewModel.urlValidationMap.collectAsStateWithLifecycle()
 
     var showClusterDialog by remember { mutableStateOf(false) }
+    var showUnverifiedLinkDialog by remember { mutableStateOf(false) }
     var localFontSize by remember { mutableStateOf(preferences.fontSize) }
 
     if (article == null) {
@@ -105,6 +118,9 @@ fun ArticleDetailScreen(
 
     val currentArticle = article!!
     val categoryColor = CategoryColors[currentArticle.category] ?: NewsBluePrimary
+    val urlValidationResult = urlValidationMap[currentArticle.url]
+    val isUnverifiedSource = urlValidationResult?.isUnverified == true
+    val isVerifiedSource = urlValidationResult?.isVerified == true
 
     val contentFontSize = when (localFontSize) {
         "SMALL" -> 14.sp
@@ -278,38 +294,122 @@ fun ArticleDetailScreen(
                         modifier = Modifier
                             .size(36.dp)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primaryContainer),
+                            .background(
+                                if (isUnverifiedSource) NewsCrimson.copy(alpha = 0.15f)
+                                else MaterialTheme.colorScheme.primaryContainer
+                            ),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = currentArticle.source.take(1),
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                color = if (isUnverifiedSource) NewsCrimson else MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         )
                     }
                     Spacer(modifier = Modifier.width(10.dp))
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 text = currentArticle.source,
                                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = if (isUnverifiedSource) NewsCrimson else MaterialTheme.colorScheme.onSurface
                             )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Icon(
-                                imageVector = Icons.Default.Verified,
-                                contentDescription = "Verified Publisher",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp)
-                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            if (isUnverifiedSource) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(NewsCrimson.copy(alpha = 0.15f))
+                                        .padding(horizontal = 5.dp, vertical = 1.dp)
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.Warning,
+                                            contentDescription = "Unverified Source",
+                                            tint = NewsCrimson,
+                                            modifier = Modifier.size(10.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Text(
+                                            text = "UNVERIFIED SOURCE",
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                color = NewsCrimson,
+                                                fontWeight = FontWeight.Black,
+                                                fontSize = 8.sp
+                                            )
+                                        )
+                                    }
+                                }
+                            } else if (isVerifiedSource) {
+                                Icon(
+                                    imageVector = Icons.Default.Verified,
+                                    contentDescription = "Verified Source Website",
+                                    tint = NewsEmerald,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
                         }
                         Text(
                             text = "By ${currentArticle.author} • ${formatTimeAgo(currentArticle.publishedAt)} • ${currentArticle.readingTime} min read",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    }
+                }
+
+                // UNVERIFIED SOURCE BANNER (If URL is dead, unreachable, or returns 404/500)
+                if (isUnverifiedSource) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("unverified_source_warning_banner"),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = NewsCrimson.copy(alpha = 0.08f)),
+                        border = BorderStroke(1.dp, NewsCrimson.copy(alpha = 0.3f))
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Warning,
+                                    contentDescription = "Warning",
+                                    tint = NewsCrimson,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Unverified Source Website",
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = NewsCrimson)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = urlValidationResult?.errorMessage ?: "The article's source website returned an invalid response or could not be reached over the network. It has been flagged as an unverified source.",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp, lineHeight = 17.sp),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Status: ${urlValidationResult?.httpStatusCode?.let { "HTTP $it" } ?: "Host Unreachable"}",
+                                    style = MaterialTheme.typography.labelSmall.copy(color = NewsCrimson, fontWeight = FontWeight.Bold)
+                                )
+                                TextButton(
+                                    onClick = { viewModel.validateArticleUrl(currentArticle.url, forceRefresh = true) },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                                ) {
+                                    Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(13.dp), tint = NewsCrimson)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Re-test URL", style = MaterialTheme.typography.labelSmall.copy(color = NewsCrimson, fontWeight = FontWeight.Bold))
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -563,23 +663,247 @@ fun ArticleDetailScreen(
                     color = MaterialTheme.colorScheme.onSurface
                 )
 
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // --- FACT CHECK & SOURCE VERIFICATION CARD ---
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(CircleShape)
+                                        .background(NewsEmerald.copy(alpha = 0.15f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Verified,
+                                        contentDescription = null,
+                                        tint = NewsEmerald,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text(
+                                        text = "JOURNALISTIC VERIFICATION",
+                                        style = MaterialTheme.typography.labelMedium.copy(
+                                            color = NewsEmerald,
+                                            fontWeight = FontWeight.Bold,
+                                            letterSpacing = 0.5.sp
+                                        )
+                                    )
+                                    Text(
+                                        text = "Fact-Check & Wire Verification",
+                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            if (isFactChecking) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    color = NewsEmerald,
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                OutlinedButton(
+                                    onClick = { viewModel.verifyArticleWithGemini(currentArticle) },
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        text = if (factCheckResult == null) "Run Fact-Check" else "Re-verify",
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        if (factCheckResult != null) {
+                            val result = factCheckResult!!
+                            val scorePercentage = result.trustScore
+                            val scoreColor = if (scorePercentage >= 85) NewsEmerald else if (scorePercentage >= 65) NewsAmber else NewsCrimson
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(scoreColor.copy(alpha = 0.1f))
+                                    .padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Verification: ${result.verificationStatus.replace('_', ' ')}",
+                                        style = MaterialTheme.typography.labelMedium.copy(
+                                            color = scoreColor,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    )
+                                    Text(
+                                        text = "Source: ${result.publisherCredibility}",
+                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(scoreColor)
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        text = "$scorePercentage% Trust",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Text(
+                                text = "Analysis & Evidence",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = result.analysis,
+                                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            if (result.keyVerifications.isNotEmpty()) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                result.keyVerifications.forEach { point ->
+                                    Text(
+                                        text = "• $point",
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            fontSize = 12.sp,
+                                            lineHeight = 17.sp
+                                        ),
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+                        } else {
+                            // Default state prior to explicit button tap
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(NewsEmerald.copy(alpha = 0.08f))
+                                    .padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Tier-1 Accredited Journalism",
+                                        style = MaterialTheme.typography.labelMedium.copy(
+                                            color = NewsEmerald,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    )
+                                    Text(
+                                        text = "Reported by ${currentArticle.source} editorial desk and tracked across 14 wire networks.",
+                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(NewsEmerald)
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        text = "${(currentArticle.importanceScore * 100).toInt()}% Trust",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // Action to read on Original Publisher Webpage
+                // --- OFFICIAL WEBSITE & CROSS-VERIFICATION BUTTONS ---
                 Button(
                     onClick = {
+                        if (isUnverifiedSource) {
+                            showUnverifiedLinkDialog = true
+                        } else {
+                            try {
+                                val targetUri = Uri.parse(currentArticle.url)
+                                val browserIntent = Intent(Intent.ACTION_VIEW, targetUri)
+                                context.startActivity(browserIntent)
+                            } catch (e: Exception) {
+                                try {
+                                    val searchIntent = Intent(
+                                        Intent.ACTION_VIEW,
+                                        Uri.parse("https://www.google.com/search?q=${Uri.encode(currentArticle.source + " " + currentArticle.title)}")
+                                    )
+                                    context.startActivity(searchIntent)
+                                } catch (ignored: Exception) {}
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().testTag("read_official_website_button"),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isUnverifiedSource) NewsCrimson else MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    if (isUnverifiedSource) {
+                        Icon(imageVector = Icons.Default.LinkOff, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Open Source Link (Unverified)")
+                    } else {
+                        Text("Read on ${currentArticle.source} Official Site")
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(imageVector = Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                OutlinedButton(
+                    onClick = {
                         try {
-                            val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(currentArticle.url))
-                            context.startActivity(browserIntent)
+                            val googleNewsUri = Uri.parse("https://news.google.com/search?q=${Uri.encode(currentArticle.title)}")
+                            val newsIntent = Intent(Intent.ACTION_VIEW, googleNewsUri)
+                            context.startActivity(newsIntent)
                         } catch (e: Exception) {
                             // Fallback
                         }
                     },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    modifier = Modifier.fillMaxWidth().testTag("search_google_news_button"),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("Read Original Article on ${currentArticle.source}")
+                    Text("Cross-Check on Google News")
                     Spacer(modifier = Modifier.width(8.dp))
                     Icon(imageVector = Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
                 }
@@ -603,7 +927,8 @@ fun ArticleDetailScreen(
                     NewsCard(
                         article = related,
                         onClick = { viewModel.openArticle(related) },
-                        onBookmarkToggle = { viewModel.toggleBookmark(related) }
+                        onBookmarkToggle = { viewModel.toggleBookmark(related) },
+                        urlValidationResult = urlValidationMap[related.url]
                     )
                 }
             }
@@ -614,6 +939,69 @@ fun ArticleDetailScreen(
         ClusterCoverageDialog(
             article = currentArticle,
             onDismiss = { showClusterDialog = false }
+        )
+    }
+
+    // Safety Alert Dialog for Unverified Source Websites
+    if (showUnverifiedLinkDialog) {
+        AlertDialog(
+            onDismissRequest = { showUnverifiedLinkDialog = false },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = "Warning",
+                    tint = NewsCrimson,
+                    modifier = Modifier.size(32.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = "Unverified Source Website",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "The official web link for this article (${currentArticle.url}) failed automated HTTP reachability validation. It returned no valid response or may be dead.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "We recommend cross-checking on Google News or trusted accredited wire services.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showUnverifiedLinkDialog = false
+                        try {
+                            val targetUri = Uri.parse(currentArticle.url)
+                            val browserIntent = Intent(Intent.ACTION_VIEW, targetUri)
+                            context.startActivity(browserIntent)
+                        } catch (e: Exception) {
+                            try {
+                                val searchIntent = Intent(
+                                    Intent.ACTION_VIEW,
+                                    Uri.parse("https://www.google.com/search?q=${Uri.encode(currentArticle.source + " " + currentArticle.title)}")
+                                )
+                                context.startActivity(searchIntent)
+                            } catch (ignored: Exception) {}
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = NewsCrimson)
+                ) {
+                    Text("Open Anyway")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showUnverifiedLinkDialog = false }) {
+                    Text("Cancel")
+                }
+            }
         )
     }
 }
