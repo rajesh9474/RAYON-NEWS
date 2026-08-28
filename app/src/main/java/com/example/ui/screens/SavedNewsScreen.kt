@@ -28,6 +28,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,6 +39,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.data.model.NewsArticle
+import com.example.ui.components.AiSummaryDialog
 import com.example.ui.components.NewsCard
 import com.example.ui.viewmodel.AppScreen
 import com.example.ui.viewmodel.NewsViewModel
@@ -47,6 +52,9 @@ fun SavedNewsScreen(
 ) {
     val bookmarkedArticles by viewModel.bookmarkedArticles.collectAsStateWithLifecycle()
     val urlValidationMap by viewModel.urlValidationMap.collectAsStateWithLifecycle()
+    val isAiSummarizing by viewModel.isAiSummarizing.collectAsStateWithLifecycle()
+
+    var aiSummaryArticleToShow by remember { mutableStateOf<NewsArticle?>(null) }
 
     Column(
         modifier = modifier
@@ -146,11 +154,25 @@ fun SavedNewsScreen(
                             article = article,
                             onClick = { viewModel.openArticle(article) },
                             onBookmarkToggle = { viewModel.toggleBookmark(article) },
+                            onAiSummaryClick = {
+                                aiSummaryArticleToShow = article
+                                viewModel.generateAiSummaryForArticle(article)
+                            },
                             urlValidationResult = urlValidationMap[article.url]
                         )
                     }
                 }
             }
         }
+    }
+
+    // AI Summary Modal Dialog
+    aiSummaryArticleToShow?.let { article ->
+        AiSummaryDialog(
+            article = article,
+            isLoading = isAiSummarizing,
+            onRegenerate = { viewModel.generateAiSummaryForArticle(article) },
+            onDismiss = { aiSummaryArticleToShow = null }
+        )
     }
 }

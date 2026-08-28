@@ -31,6 +31,9 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,7 +42,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.data.model.NewsArticle
 import com.example.data.model.NewsCategories
+import com.example.ui.components.AiSummaryDialog
 import com.example.ui.components.NewsCard
 import com.example.ui.viewmodel.AppScreen
 import com.example.ui.viewmodel.NewsViewModel
@@ -55,6 +60,9 @@ fun SearchScreen(
     val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
     val allArticles by viewModel.allArticles.collectAsStateWithLifecycle()
     val urlValidationMap by viewModel.urlValidationMap.collectAsStateWithLifecycle()
+    val isAiSummarizing by viewModel.isAiSummarizing.collectAsStateWithLifecycle()
+
+    var aiSummaryArticleToShow by remember { mutableStateOf<NewsArticle?>(null) }
 
     val popularSearches = listOf("Artificial Intelligence", "Semiconductor", "Climate Summit", "ISRO", "Champions League", "Cricket", "Sensex", "Fusion Energy")
 
@@ -64,13 +72,14 @@ fun SearchScreen(
         searchResults
     }
 
-    LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .testTag("search_screen"),
-        contentPadding = PaddingValues(bottom = 80.dp)
-    ) {
+    Box(modifier = modifier.fillMaxSize()) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .testTag("search_screen"),
+            contentPadding = PaddingValues(bottom = 80.dp)
+        ) {
         // --- TOP SEARCH INPUT BAR ---
         item {
             Row(
@@ -201,9 +210,24 @@ fun SearchScreen(
                     article = article,
                     onClick = { viewModel.openArticle(article) },
                     onBookmarkToggle = { viewModel.toggleBookmark(article) },
+                    onAiSummaryClick = {
+                        aiSummaryArticleToShow = article
+                        viewModel.generateAiSummaryForArticle(article)
+                    },
                     urlValidationResult = urlValidationMap[article.url]
                 )
             }
         }
     }
+
+    // AI Summary Modal Dialog
+    aiSummaryArticleToShow?.let { article ->
+        AiSummaryDialog(
+            article = article,
+            isLoading = isAiSummarizing,
+            onRegenerate = { viewModel.generateAiSummaryForArticle(article) },
+            onDismiss = { aiSummaryArticleToShow = null }
+        )
+    }
+}
 }

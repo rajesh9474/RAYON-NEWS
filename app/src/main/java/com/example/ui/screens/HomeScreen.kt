@@ -130,10 +130,27 @@ fun HomeScreen(
         val filterQuery: String
     )
 
+    // Quick filter chip definition
+    data class QuickFilterChip(
+        val id: String,
+        val label: String,
+        val emoji: String,
+        val filterQuery: String
+    )
+
+    val quickFilterChips = remember {
+        listOf(
+            QuickFilterChip("all", "All", "🌐", "Top News"),
+            QuickFilterChip("politics", "Politics", "🏛️", "Politics"),
+            QuickFilterChip("tech", "Technology", "💻", "Technology"),
+            QuickFilterChip("science", "Science", "🧪", "Science")
+        )
+    }
+
     val feedCategories = remember {
         listOf(
             FeedTabCategory("top", "Top Stories", "🔥", "Top News"),
-            FeedTabCategory("tech", "Tech", "💻", "Tech"),
+            FeedTabCategory("tech", "Tech", "💻", "Technology"),
             FeedTabCategory("politics", "Politics", "🏛️", "Politics"),
             FeedTabCategory("health", "Health", "🏥", "Health"),
             FeedTabCategory("business", "Business", "💼", "Business"),
@@ -148,7 +165,9 @@ fun HomeScreen(
     val selectedTabIndex = remember(selectedCategory, feedCategories) {
         val idx = feedCategories.indexOfFirst { category ->
             selectedCategory.equals(category.filterQuery, ignoreCase = true) ||
-            (category.id == "top" && (selectedCategory.equals("Top News", ignoreCase = true) || selectedCategory.isBlank()))
+            selectedCategory.equals(category.displayName, ignoreCase = true) ||
+            (category.id == "tech" && (selectedCategory.equals("Technology", ignoreCase = true) || selectedCategory.equals("Tech", ignoreCase = true))) ||
+            (category.id == "top" && (selectedCategory.equals("Top News", ignoreCase = true) || selectedCategory.equals("All", ignoreCase = true) || selectedCategory.isBlank()))
         }
         if (idx >= 0) idx else 0
     }
@@ -166,7 +185,9 @@ fun HomeScreen(
                 isRefreshing = isRefreshingFeeds,
                 containerColor = MaterialTheme.colorScheme.surfaceVariant,
                 color = NewsBluePrimary,
-                modifier = Modifier.align(Alignment.TopCenter)
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .testTag("pull_refresh_indicator")
             )
         }
     ) {
@@ -376,6 +397,67 @@ fun HomeScreen(
             }
         }
 
+        // --- FILTER CHIP GROUP FOR QUICK TOGGLING ('All', 'Politics', 'Technology', 'Science') ---
+        item(key = "quick_category_filter_chips") {
+            LazyRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f))
+                    .padding(vertical = 8.dp)
+                    .testTag("quick_filter_chip_group"),
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                items(quickFilterChips, key = { it.id }) { chip ->
+                    val isChipSelected = when (chip.id) {
+                        "all" -> selectedCategory.isBlank() || selectedCategory.equals("Top News", ignoreCase = true) || selectedCategory.equals("All", ignoreCase = true)
+                        "tech" -> selectedCategory.equals("Technology", ignoreCase = true) || selectedCategory.equals("Tech", ignoreCase = true)
+                        "politics" -> selectedCategory.equals("Politics", ignoreCase = true)
+                        "science" -> selectedCategory.equals("Science", ignoreCase = true)
+                        else -> selectedCategory.equals(chip.filterQuery, ignoreCase = true)
+                    }
+
+                    FilterChip(
+                        selected = isChipSelected,
+                        onClick = {
+                            viewModel.selectCategory(chip.filterQuery)
+                        },
+                        label = {
+                            Text(
+                                text = chip.label,
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = if (isChipSelected) FontWeight.Bold else FontWeight.Medium,
+                                    fontSize = 13.sp
+                                )
+                            )
+                        },
+                        leadingIcon = {
+                            Text(
+                                text = chip.emoji,
+                                fontSize = 13.sp
+                            )
+                        },
+                        shape = RoundedCornerShape(20.dp),
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primary,
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                            selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimary,
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+                            labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        ),
+                        border = FilterChipDefaults.filterChipBorder(
+                            enabled = true,
+                            selected = isChipSelected,
+                            borderColor = if (isChipSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                            borderWidth = 1.dp
+                        ),
+                        modifier = Modifier.testTag("filter_chip_${chip.id}")
+                    )
+                }
+            }
+        }
+
         // --- HORIZONTAL SLIDING ANIMATED CATEGORY FEED CONTENT ---
         item(key = "animated_category_feed") {
             AnimatedContent(
@@ -576,17 +658,19 @@ private fun filterArticlesByCategory(
     allArticles: List<NewsArticle>,
     personalizedFeed: List<NewsArticle>
 ): List<NewsArticle> {
-    if (categoryQuery == "Top News" || categoryQuery == "top" || categoryQuery.isBlank()) {
+    if (categoryQuery == "Top News" || categoryQuery == "top" || categoryQuery.equals("All", ignoreCase = true) || categoryQuery.isBlank()) {
         return if (personalizedFeed.isNotEmpty()) personalizedFeed else allArticles
     }
     val query = categoryQuery.trim()
     val filtered = allArticles.filter { article ->
         when {
             article.category.equals(query, ignoreCase = true) -> true
-            query.equals("Tech", ignoreCase = true) && (
+            (query.equals("Tech", ignoreCase = true) || query.equals("Technology", ignoreCase = true)) && (
                 article.category.contains("Tech", ignoreCase = true) ||
+                article.category.contains("Technology", ignoreCase = true) ||
                 article.category.contains("Artificial Intelligence", ignoreCase = true) ||
                 article.tags.contains("Tech", ignoreCase = true) ||
+                article.tags.contains("Technology", ignoreCase = true) ||
                 article.tags.contains("Silicon", ignoreCase = true)
             ) -> true
             query.equals("Politics", ignoreCase = true) && (

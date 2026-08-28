@@ -74,6 +74,7 @@ import coil.compose.AsyncImage
 import com.example.data.model.NewsArticle
 import com.example.data.remote.UrlStatus
 import com.example.data.remote.UrlValidationResult
+import com.example.ui.components.AiSummaryDialog
 import com.example.ui.components.ClusterCoverageDialog
 import com.example.ui.components.NewsCard
 import com.example.ui.components.formatTimeAgo
@@ -102,6 +103,7 @@ fun ArticleDetailScreen(
 
     var showClusterDialog by remember { mutableStateOf(false) }
     var showUnverifiedLinkDialog by remember { mutableStateOf(false) }
+    var showAiSummaryDialog by remember { mutableStateOf(false) }
     var localFontSize by remember { mutableStateOf(preferences.fontSize) }
 
     if (article == null) {
@@ -163,6 +165,23 @@ fun ArticleDetailScreen(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    // AI Summary Modal Dialog Trigger
+                    IconButton(
+                        onClick = {
+                            showAiSummaryDialog = true
+                            if (currentArticle.aiSummary30Sec.isBlank()) {
+                                viewModel.generateAiSummaryForArticle(currentArticle)
+                            }
+                        },
+                        modifier = Modifier.testTag("top_ai_summary_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = "AI Summary Modal",
+                            tint = NewsAmber
+                        )
+                    }
+
                     // Font Size Toggle (S, M, L)
                     IconButton(
                         onClick = {
@@ -525,16 +544,34 @@ fun ArticleDetailScreen(
                             if (isAiSummarizing) {
                                 CircularProgressIndicator(modifier = Modifier.size(18.dp), color = NewsAmber, strokeWidth = 2.dp)
                             } else {
-                                IconButton(
-                                    onClick = { viewModel.generateAiSummaryForArticle(currentArticle) },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Refresh,
-                                        contentDescription = "Regenerate Summary",
-                                        tint = NewsAmber,
-                                        modifier = Modifier.size(18.dp)
-                                    )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    IconButton(
+                                        onClick = {
+                                            showAiSummaryDialog = true
+                                            if (currentArticle.aiSummary30Sec.isBlank()) {
+                                                viewModel.generateAiSummaryForArticle(currentArticle)
+                                            }
+                                        },
+                                        modifier = Modifier.size(32.dp).testTag("open_modal_summary_button")
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                                            contentDescription = "Open Summary Modal Dialog",
+                                            tint = NewsAmber,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = { viewModel.generateAiSummaryForArticle(currentArticle) },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Refresh,
+                                            contentDescription = "Regenerate Summary",
+                                            tint = NewsAmber,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -1002,6 +1039,16 @@ fun ArticleDetailScreen(
                     Text("Cancel")
                 }
             }
+        )
+    }
+
+    // AI Summary Modal Dialog
+    if (showAiSummaryDialog) {
+        AiSummaryDialog(
+            article = currentArticle,
+            isLoading = isAiSummarizing,
+            onRegenerate = { viewModel.generateAiSummaryForArticle(currentArticle) },
+            onDismiss = { showAiSummaryDialog = false }
         )
     }
 }
